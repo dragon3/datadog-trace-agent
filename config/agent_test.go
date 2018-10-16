@@ -194,6 +194,7 @@ func TestUndocumentedYamlConfig(t *testing.T) {
 	assert.Equal("apikey_12", c.APIKey)
 	assert.Equal(0.33, c.ExtraSampleRate)
 	assert.Equal(100.0, c.MaxTPS)
+	assert.Equal(50, c.MaxEventsPerTrace)
 	assert.Equal(25, c.ReceiverPort)
 	// watchdog
 	assert.Equal(0.07, c.MaxCPU)
@@ -291,4 +292,22 @@ func TestAnalyzedSpansEnvConfig(t *testing.T) {
 	assert.Equal(float64(0), c.AnalyzedSpansByService["service1"]["operation3"])
 	assert.Equal(float64(1), c.AnalyzedSpansByService["service2"]["operation2"])
 
+}
+
+func TestZeroables(t *testing.T) {
+	assert := assert.New(t)
+
+	c, err := loadFile("./testdata/zeroables.yaml")
+	assert.NoError(err)
+
+	assert.EqualValues(0, c.MaxEventsPerTrace)
+}
+
+func TestZeroablesDefault(t *testing.T) {
+	assert := assert.New(t)
+
+	c, err := loadFile("./testdata/empty.yaml")
+	assert.NoError(err)
+
+	assert.EqualValues(New().MaxEventsPerTrace, c.MaxEventsPerTrace)
 }

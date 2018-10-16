@@ -6,6 +6,7 @@ import (
 
 	"github.com/DataDog/datadog-trace-agent/model"
 	"github.com/DataDog/datadog-trace-agent/sampler"
+	"github.com/DataDog/datadog-trace-agent/testutil"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -48,7 +49,7 @@ func TestTransactionSampler(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ts := newTransactionSampler(config)
+			ts := newTransactionSampler(config, 10)
 			analyzedSpans := ts.Extract(test.trace)
 
 			if test.expectedSampling {
@@ -58,4 +59,50 @@ func TestTransactionSampler(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMaxEventsPerTrace(t *testing.T) {
+	testSpan := testutil.RandomSpan()
+
+	config := map[string]map[string]float64{
+		testSpan.Service: {
+			testSpan.Name: 1,
+		},
+	}
+
+	spans := make([]*model.Span, 100)
+
+	for i := 0; i < len(spans); i++ {
+		spans[i] = testSpan
+	}
+
+	trace := model.Trace(spans)
+
+	processedTrace := processedTrace{
+		Env:           "test",
+		Root:          spans[0],
+		Sublayers:     nil,
+		Trace:         trace,
+		WeightedTrace: model.NewWeightedTrace(trace, spans[0]),
+	}
+
+	t.Run("no limit", func(t *testing.T) {
+		ts := newTransactionSampler(config, -1)
+		assert.Len(t, ts.Extract(processedTrace), len(spans))
+	})
+
+	t.Run("no events", func(t *testing.T) {
+		ts := newTransactionSampler(config, 0)
+		assert.Len(t, ts.Extract(processedTrace), 0)
+	})
+
+	t.Run("5 events", func(t *testing.T) {
+		ts := newTransactionSampler(config, 5)
+		assert.Len(t, ts.Extract(processedTrace), 5)
+	})
+
+	t.Run("exact num spans", func(t *testing.T) {
+		ts := newTransactionSampler(config, len(spans))
+		assert.Len(t, ts.Extract(processedTrace), len(spans))
+	})
 }

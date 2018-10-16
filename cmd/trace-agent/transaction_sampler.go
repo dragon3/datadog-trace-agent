@@ -15,10 +15,10 @@ type TransactionSampler interface {
 // NewTransactionSampler creates a new empty transaction sampler
 func NewTransactionSampler(conf *config.AgentConfig) TransactionSampler {
 	if len(conf.AnalyzedSpansByService) > 0 {
-		return newTransactionSampler(conf.AnalyzedSpansByService)
+		return newTransactionSampler(conf.AnalyzedSpansByService, conf.MaxEventsPerTrace)
 	}
 	if len(conf.AnalyzedRateByServiceLegacy) > 0 {
-		return newLegacyTransactionSampler(conf.AnalyzedRateByServiceLegacy)
+		return newLegacyTransactionSampler(conf.AnalyzedRateByServiceLegacy, conf.MaxEventsPerTrace)
 	}
 	return &disabledTransactionSampler{}
 }
@@ -31,11 +31,13 @@ func (s *disabledTransactionSampler) Extract(t processedTrace) []*model.Span {
 
 type transactionSampler struct {
 	analyzedSpansByService map[string]map[string]float64
+	maxEventsPerTrace      int
 }
 
-func newTransactionSampler(analyzedSpansByService map[string]map[string]float64) *transactionSampler {
+func newTransactionSampler(analyzedSpansByService map[string]map[string]float64, maxEventsPerTrace int) *transactionSampler {
 	return &transactionSampler{
 		analyzedSpansByService: analyzedSpansByService,
+		maxEventsPerTrace:      maxEventsPerTrace,
 	}
 }
 
@@ -48,6 +50,11 @@ func (s *transactionSampler) Extract(t processedTrace) []*model.Span {
 	// inspect the WeightedTrace so that we can identify top-level spans
 	for _, span := range t.WeightedTrace {
 		if s.shouldAnalyze(span, hasPriority, priority) {
+			// Limit number of transactions/events per trace if needed
+			if s.maxEventsPerTrace >= 0 && len(transactions) >= s.maxEventsPerTrace {
+				break
+			}
+
 			transactions = append(transactions, span.Span)
 		}
 	}
@@ -70,11 +77,13 @@ func (s *transactionSampler) shouldAnalyze(span *model.WeightedSpan, hasPriority
 
 type legacyTransactionSampler struct {
 	analyzedRateByService map[string]float64
+	maxEventsPerTrace     int
 }
 
-func newLegacyTransactionSampler(analyzedRateByService map[string]float64) *legacyTransactionSampler {
+func newLegacyTransactionSampler(analyzedRateByService map[string]float64, maxEventsPerTrace int) *legacyTransactionSampler {
 	return &legacyTransactionSampler{
 		analyzedRateByService: analyzedRateByService,
+		maxEventsPerTrace:     maxEventsPerTrace,
 	}
 }
 
@@ -84,6 +93,11 @@ func (s *legacyTransactionSampler) Extract(t processedTrace) []*model.Span {
 
 	// inspect the WeightedTrace so that we can identify top-level spans
 	for _, span := range t.WeightedTrace {
+		// Limit number of transactions/events per trace
+		if s.maxEventsPerTrace >= 0 && len(transactions) >= s.maxEventsPerTrace {
+			break
+		}
+
 		if s.shouldAnalyze(span) {
 			transactions = append(transactions, span.Span)
 		}

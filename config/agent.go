@@ -47,8 +47,9 @@ type AgentConfig struct {
 	ExtraAggregators []string
 
 	// Sampler configuration
-	ExtraSampleRate float64
-	MaxTPS          float64
+	ExtraSampleRate   float64
+	MaxTPS            float64
+	MaxEventsPerTrace int
 
 	// Receiver
 	ReceiverHost    string
@@ -114,8 +115,9 @@ func New() *AgentConfig {
 		BucketInterval:   time.Duration(10) * time.Second,
 		ExtraAggregators: []string{"http.status_code"},
 
-		ExtraSampleRate: 1.0,
-		MaxTPS:          10,
+		ExtraSampleRate:   1.0,
+		MaxTPS:            10,
+		MaxEventsPerTrace: 50,
 
 		ReceiverHost:    "localhost",
 		ReceiverPort:    8126,
