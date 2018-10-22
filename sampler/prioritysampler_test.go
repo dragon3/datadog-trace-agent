@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/DataDog/datadog-trace-agent/constants"
 	log "github.com/cihub/seelog"
 
 	"github.com/DataDog/datadog-trace-agent/config"
@@ -48,7 +49,7 @@ func getTestTraceWithService(t *testing.T, service string, s *PriorityEngine) (m
 	if r <= rate {
 		priority = 1
 	}
-	trace[0].Metrics = map[string]float64{SamplingPriorityKey: priority}
+	trace[0].Metrics = map[string]float64{constants.SamplingPriorityKey: priority}
 	return trace, trace[0]
 }
 
@@ -67,7 +68,7 @@ func TestPrioritySample(t *testing.T) {
 	s = getTestPriorityEngine()
 	trace, root = getTestTraceWithService(t, "my-service", s)
 
-	root.Metrics[SamplingPriorityKey] = -1
+	root.Metrics[constants.SamplingPriorityKey] = -1
 	assert.False(s.Sample(trace, root, env), "trace with negative priority is dropped")
 	assert.Equal(0.0, s.Sampler.Backend.GetTotalScore(), "sampling a priority -1 trace should *NOT* impact sampler backend")
 	assert.Equal(0.0, s.Sampler.Backend.GetSampledScore(), "sampling a priority -1 trace should *NOT* impact sampler backend")
@@ -75,7 +76,7 @@ func TestPrioritySample(t *testing.T) {
 	s = getTestPriorityEngine()
 	trace, root = getTestTraceWithService(t, "my-service", s)
 
-	root.Metrics[SamplingPriorityKey] = 0
+	root.Metrics[constants.SamplingPriorityKey] = 0
 	assert.False(s.Sample(trace, root, env), "trace with priority 0 is dropped")
 	assert.True(0.0 < s.Sampler.Backend.GetTotalScore(), "sampling a priority 0 trace should increase total score")
 	assert.Equal(0.0, s.Sampler.Backend.GetSampledScore(), "sampling a priority 0 trace should *NOT* increase sampled score")
@@ -83,7 +84,7 @@ func TestPrioritySample(t *testing.T) {
 	s = getTestPriorityEngine()
 	trace, root = getTestTraceWithService(t, "my-service", s)
 
-	root.Metrics[SamplingPriorityKey] = 1
+	root.Metrics[constants.SamplingPriorityKey] = 1
 	assert.True(s.Sample(trace, root, env), "trace with priority 1 is kept")
 	assert.True(0.0 < s.Sampler.Backend.GetTotalScore(), "sampling a priority 0 trace should increase total score")
 	assert.True(0.0 < s.Sampler.Backend.GetSampledScore(), "sampling a priority 0 trace should increase sampled score")
@@ -91,7 +92,7 @@ func TestPrioritySample(t *testing.T) {
 	s = getTestPriorityEngine()
 	trace, root = getTestTraceWithService(t, "my-service", s)
 
-	root.Metrics[SamplingPriorityKey] = 2
+	root.Metrics[constants.SamplingPriorityKey] = 2
 	assert.True(s.Sample(trace, root, env), "trace with priority 2 is kept")
 	assert.Equal(0.0, s.Sampler.Backend.GetTotalScore(), "sampling a priority 2 trace should *NOT* increase total score")
 	assert.Equal(0.0, s.Sampler.Backend.GetSampledScore(), "sampling a priority 2 trace should *NOT* increase sampled score")
@@ -99,12 +100,12 @@ func TestPrioritySample(t *testing.T) {
 	s = getTestPriorityEngine()
 	trace, root = getTestTraceWithService(t, "my-service", s)
 
-	root.Metrics[SamplingPriorityKey] = 999
+	root.Metrics[constants.SamplingPriorityKey] = 999
 	assert.True(s.Sample(trace, root, env), "trace with high priority is kept")
 	assert.Equal(0.0, s.Sampler.Backend.GetTotalScore(), "sampling a high priority trace should *NOT* increase total score")
 	assert.Equal(0.0, s.Sampler.Backend.GetSampledScore(), "sampling a high priority trace should *NOT* increase sampled score")
 
-	delete(root.Metrics, SamplingPriorityKey)
+	delete(root.Metrics, constants.SamplingPriorityKey)
 	assert.False(s.Sample(trace, root, env), "this should not happen but a trace without priority sampling set should be dropped")
 }
 
@@ -139,7 +140,7 @@ func TestMaxTPSByService(t *testing.T) {
 	for _, tc := range testCases {
 		t.Logf("testing maxTPS=%0.1f tps=%0.1f", tc.maxTPS, tc.tps)
 		s.Sampler.maxTPS = tc.maxTPS
-		periodSeconds := defaultDecayPeriod.Seconds()
+		periodSeconds := DefaultDecayPeriod.Seconds()
 		tracesPerPeriod := tc.tps * periodSeconds
 		// Set signature score offset high enough not to kick in during the test.
 		s.Sampler.signatureScoreOffset = 2 * tc.tps
@@ -172,7 +173,7 @@ func TestMaxTPSByService(t *testing.T) {
 		if tc.maxTPS > tc.tps {
 			targetTPS = tc.tps
 		} else {
-			relativeError = 0.1 + defaultDecayFactor - 1
+			relativeError = 0.1 + DefaultDecayFactor - 1
 		}
 
 		// Check that the sampled score is roughly equal to maxTPS. This is different from

@@ -9,6 +9,9 @@ import (
 
 	"github.com/DataDog/datadog-trace-agent/api"
 	"github.com/DataDog/datadog-trace-agent/config"
+	"github.com/DataDog/datadog-trace-agent/constants"
+	"github.com/DataDog/datadog-trace-agent/event/extractor"
+	"github.com/DataDog/datadog-trace-agent/event/sampler"
 	"github.com/DataDog/datadog-trace-agent/filters"
 	"github.com/DataDog/datadog-trace-agent/info"
 	"github.com/DataDog/datadog-trace-agent/model"
@@ -22,29 +25,6 @@ import (
 
 const processStatsInterval = time.Minute
 
-type processedTrace struct {
-	Trace         model.Trace
-	WeightedTrace model.WeightedTrace
-	Root          *model.Span
-	Env           string
-	Sublayers     map[*model.Span][]model.SublayerValue
-}
-
-func (pt *processedTrace) weight() float64 {
-	if pt.Root == nil {
-		return 1.0
-	}
-	return pt.Root.Weight()
-}
-
-func (pt *processedTrace) getSamplingPriority() (int, bool) {
-	if pt.Root == nil {
-		return 0, false
-	}
-	p, ok := pt.Root.Metrics[sampler.SamplingPriorityKey]
-	return int(p), ok
-}
-
 // Agent struct holds all the sub-routines structs and make the data flow between them
 type Agent struct {
 	Receiver           *api.HTTPReceiver
@@ -54,7 +34,8 @@ type Agent struct {
 	ScoreSampler       *Sampler
 	ErrorsScoreSampler *Sampler
 	PrioritySampler    *Sampler
-	TransactionSampler TransactionSampler
+	EventExtractor     eventextractor.Extractor
+	EventSampler       *eventsampler.BatchSampler
 	TraceWriter        *writer.TraceWriter
 	ServiceWriter      *writer.ServiceWriter
 	StatsWriter        *writer.StatsWriter
@@ -99,7 +80,8 @@ func NewAgent(ctx context.Context, conf *config.AgentConfig) *Agent {
 	ss := NewScoreSampler(conf)
 	ess := NewErrorsSampler(conf)
 	ps := NewPrioritySampler(conf, dynConf)
-	ts := NewTransactionSampler(conf)
+	ee := eventextractor.FromConf(conf)
+	et := eventsampler.FromConf(conf)
 	se := NewTraceServiceExtractor(serviceChan)
 	sm := NewServiceMapper(serviceChan, filteredServiceChan)
 	tw := writer.NewTraceWriter(conf, sampledTraceChan)
@@ -114,7 +96,8 @@ func NewAgent(ctx context.Context, conf *config.AgentConfig) *Agent {
 		ScoreSampler:       ss,
 		ErrorsScoreSampler: ess,
 		PrioritySampler:    ps,
-		TransactionSampler: ts,
+		EventExtractor:     ee,
+		EventSampler:       et,
 		TraceWriter:        tw,
 		StatsWriter:        sw,
 		ServiceWriter:      svcW,
@@ -191,7 +174,7 @@ func (a *Agent) Process(t model.Trace) {
 	ts := a.Receiver.Stats.GetTagStats(info.Tags{})
 
 	// Extract priority early, as later goroutines might manipulate the Metrics map in parallel which isn't safe.
-	priority, hasPriority := root.Metrics[sampler.SamplingPriorityKey]
+	priority, hasPriority := root.Metrics[constants.SamplingPriorityKey]
 
 	// Depending on the sampling priority, count that trace differently.
 	stat := &ts.TracesPriorityNone
@@ -241,7 +224,7 @@ func (a *Agent) Process(t model.Trace) {
 		model.SetSublayersOnSpan(subtrace.Root, subtraceSublayers)
 	}
 
-	pt := processedTrace{
+	pt := model.ProcessedTrace{
 		Trace:         t,
 		WeightedTrace: model.NewWeightedTrace(t, root),
 		Root:          root,
@@ -299,7 +282,8 @@ func (a *Agent) Process(t model.Trace) {
 			sampledTrace.Trace = &pt.Trace
 		}
 
-		sampledTrace.Transactions = a.TransactionSampler.Extract(pt)
+		sampledTrace.Events = a.EventExtractor.Extract(pt, sampled)
+		sampledTrace.Events = a.EventSampler.Sample(sampledTrace.Events)
 		// TODO: attach to these transactions the client, pre-sampler and transaction sample rates.
 
 		if !sampledTrace.Empty() {

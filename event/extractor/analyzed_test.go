@@ -1,24 +1,25 @@
-package main
+package eventextractor
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 
+	"github.com/DataDog/datadog-trace-agent/constants"
 	"github.com/DataDog/datadog-trace-agent/model"
-	"github.com/DataDog/datadog-trace-agent/sampler"
 	"github.com/stretchr/testify/assert"
 )
 
-func createTrace(serviceName string, operationName string, topLevel bool, hasPriority bool, priority int) processedTrace {
+func createTrace(serviceName string, operationName string, topLevel bool, hasPriority bool, priority int) model.ProcessedTrace {
 	ws := model.WeightedSpan{TopLevel: topLevel, Span: &model.Span{Service: serviceName, Name: operationName}}
 	if hasPriority {
-		ws.SetMetric(sampler.SamplingPriorityKey, float64(priority))
+		ws.SetMetric(constants.SamplingPriorityKey, float64(priority))
 	}
 	wt := model.WeightedTrace{&ws}
-	return processedTrace{WeightedTrace: wt, Root: ws.Span}
+	return model.ProcessedTrace{WeightedTrace: wt, Root: ws.Span}
 }
 
-func TestTransactionSampler(t *testing.T) {
+func TestAnalyzedExtractor(t *testing.T) {
 	assert := assert.New(t)
 
 	config := make(map[string]map[string]float64)
@@ -30,7 +31,7 @@ func TestTransactionSampler(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		trace            processedTrace
+		trace            model.ProcessedTrace
 		expectedSampling bool
 	}{
 		{"Top-level service and span name match", createTrace("myService", "myOperation", true, false, 0), true},
@@ -48,8 +49,8 @@ func TestTransactionSampler(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ts := newTransactionSampler(config)
-			analyzedSpans := ts.Extract(test.trace)
+			ae := NewAnalyzed(config)
+			analyzedSpans := ae.Extract(test.trace, rand.Int() > 0)
 
 			if test.expectedSampling {
 				assert.Len(analyzedSpans, 1, fmt.Sprintf("Trace %v should have been sampled", test.trace))

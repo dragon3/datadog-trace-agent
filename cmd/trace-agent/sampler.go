@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/DataDog/datadog-trace-agent/model"
 	log "github.com/cihub/seelog"
 
 	"github.com/DataDog/datadog-trace-agent/config"
@@ -63,7 +64,7 @@ func (s *Sampler) Run() {
 }
 
 // Add samples a trace and returns true if trace was sampled (should be kept), false otherwise
-func (s *Sampler) Add(t processedTrace) bool {
+func (s *Sampler) Add(t model.ProcessedTrace) bool {
 	atomic.AddUint64(&s.totalTraceCount, 1)
 
 	if s.engine.Sample(t.Trace, t.Root, t.Env) {

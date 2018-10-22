@@ -281,15 +281,18 @@ func assertPayloads(assert *assert.Assertions, traceWriter *TraceWriter, expecte
 	sampledTraces []*SampledTrace, payloads []Payload) {
 
 	var expectedTraces []*model.Trace
-	var expectedTransactions []*model.Span
+	var expectedEvents []*model.APMEvent
 
 	for _, sampledTrace := range sampledTraces {
 		expectedTraces = append(expectedTraces, sampledTrace.Trace)
-		expectedTransactions = append(expectedTransactions, sampledTrace.Transactions...)
+
+		for _, event := range sampledTrace.Events {
+			expectedEvents = append(expectedEvents, event)
+		}
 	}
 
 	var expectedTraceIdx int
-	var expectedTransactionIdx int
+	var expectedEventIdx int
 
 	for _, payload := range payloads {
 		assert.Equal(expectedHeaders, payload.Headers, "Payload headers should match expectation")
@@ -323,12 +326,12 @@ func assertPayloads(assert *assert.Assertions, traceWriter *TraceWriter, expecte
 		for _, seenTransaction := range tracePayload.Transactions {
 			numSpans++
 
-			if !assert.True(proto.Equal(expectedTransactions[expectedTransactionIdx], seenTransaction),
+			if !assert.True(proto.Equal(expectedEvents[expectedEventIdx], seenTransaction),
 				"Unmarshalled transaction should match expectation at index %d", expectedTraceIdx) {
 				return
 			}
 
-			expectedTransactionIdx++
+			expectedEventIdx++
 		}
 
 		// If there's more than 1 trace or transaction in this payload, don't let it go over the limit. Otherwise,
@@ -358,15 +361,21 @@ func testTraceWriter() (*TraceWriter, chan *SampledTrace, *testEndpoint, *testut
 	}
 }
 
-func randomSampledTrace(numSpans, numTransactions int) *SampledTrace {
-	if numSpans < numTransactions {
+func randomSampledTrace(numSpans, numEvents int) *SampledTrace {
+	if numSpans < numEvents {
 		panic("can't have more transactions than spans in a RandomSampledTrace")
 	}
 
 	trace := testutil.GetTestTrace(1, numSpans, true)[0]
 
+	events := make([]*model.APMEvent, 0, numEvents)
+
+	for _, span := range trace[:numEvents] {
+		events = append(events, (*model.APMEvent)(span))
+	}
+
 	return &SampledTrace{
-		Trace:        &trace,
-		Transactions: trace[:numTransactions],
+		Trace:  &trace,
+		Events: events,
 	}
 }

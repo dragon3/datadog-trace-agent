@@ -53,7 +53,7 @@ func NewPreSampler() *PreSampler {
 		stats: PreSamplerStats{
 			Rate: 1,
 		},
-		decayPeriod: defaultDecayPeriod,
+		decayPeriod: DefaultDecayPeriod,
 		decayFactor: decayFactor,
 		exit:        make(chan struct{}),
 	}

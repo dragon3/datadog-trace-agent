@@ -11,7 +11,7 @@ import (
 func getTestBackend() *MemoryBackend {
 	decayPeriod := 5 * time.Second
 
-	return NewMemoryBackend(decayPeriod, defaultDecayFactor)
+	return NewMemoryBackend(decayPeriod, DefaultDecayFactor)
 }
 
 func randomSignature() Signature {
