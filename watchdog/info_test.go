@@ -133,7 +133,7 @@ func TestMemHigh(t *testing.T) {
 		return
 	}
 	doTestMemHigh(t, 1e7)
-	doTestMemHigh(t, 1e9)
+	//doTestMemHigh(t, 1e9)
 }
 
 type testNetHandler struct {
